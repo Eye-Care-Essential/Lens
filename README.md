@@ -4,7 +4,7 @@ PriceLens is a Windows desktop app for identifying a product from a live camera
 image and opening price-comparison searches. It asks Gemini to identify the item;
 the app opens search pages and does not collect prices.
 
-## M1: manual identification
+## M1 and M2: manual and hands-free identification
 
 The current MVP provides:
 
@@ -14,9 +14,15 @@ The current MVP provides:
 - Seven search tabs: Google Shopping, BigGo, feebee, momo, PChome 24h, Shopee,
   and Ruten.
 - Local storage for the Gemini key, model, and selected camera.
+- Optional **Start Detection** mode: motion must stop for one second before
+  identification begins. A background reference, perceptual duplicate check, and
+  three-second cooldown filter empty scenes and repeated triggers.
+- Optional barcode hints, **Reset background**, and a visible auto-detection state.
+- Manual SPACE/button identification continues to work while automatic detection
+  is running and bypasses its automatic dedupe and cooldown guards.
 
-Automatic motion detection, barcode reading, history, other AI providers, and
-installers belong to later milestones in [PLAN.md](PLAN.md).
+History, other AI providers, and installers belong to later milestones in
+[PLAN.md](PLAN.md).
 
 ## Gemini API key
 

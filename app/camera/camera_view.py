@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QIODevice, Signal, Slot
+from PySide6.QtCore import Qt, QIODevice, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtMultimedia import QCamera, QCameraDevice, QMediaCaptureSession, QVideoFrame, QVideoSink
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 class CameraView(QWidget):
     camera_error = Signal(str)
+    frame_changed = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -49,32 +50,19 @@ class CameraView(QWidget):
             self._camera.stop()
 
     def current_jpeg(self) -> bytes | None:
+        return image_to_jpeg(self.current_image())
+
+    def current_image(self) -> QImage | None:
         if self._image is None or self._image.isNull():
             return None
-        from PySide6.QtCore import QByteArray, QBuffer
+        return self._image.copy()
 
-        image = self._image
-        if max(image.width(), image.height()) > 1024:
-            image = image.scaled(
-                1024,
-                1024,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        data = QByteArray()
-        buffer = QBuffer(data)
-        if not buffer.open(QIODevice.OpenModeFlag.WriteOnly):
-            return None
-        image.save(buffer, "JPEG", 85)
-        buffer.close()
-        return bytes(data)
-
-    @Slot(QVideoFrame)
     def _on_video_frame(self, frame: QVideoFrame) -> None:
         image = frame.toImage()
         if image.isNull():
             return
         self._image = image.copy()
+        self.frame_changed.emit(self._image.copy())
         pixmap = QPixmap.fromImage(self._image)
         self.preview.setPixmap(
             pixmap.scaled(
@@ -99,3 +87,26 @@ class CameraView(QWidget):
         clean_message = message.strip() or "Camera could not be opened."
         self.preview.setText(f"Camera unavailable\n{clean_message}")
         self.camera_error.emit(clean_message)
+
+
+def image_to_jpeg(source: QImage | None) -> bytes | None:
+    if source is None or source.isNull():
+        return None
+
+    from PySide6.QtCore import QByteArray, QBuffer
+
+    image = source
+    if max(image.width(), image.height()) > 1024:
+        image = image.scaled(
+            1024,
+            1024,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+    data = QByteArray()
+    buffer = QBuffer(data)
+    if not buffer.open(QIODevice.OpenModeFlag.WriteOnly):
+        return None
+    image.save(buffer, "JPEG", 85)
+    buffer.close()
+    return bytes(data)
