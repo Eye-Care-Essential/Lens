@@ -27,7 +27,7 @@ class CameraView(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.preview)
 
-    def set_device(self, device: QCameraDevice | None) -> None:
+    def set_device(self, device: QCameraDevice | None, resolution: str = "") -> None:
         if self._camera is not None:
             self._camera.stop()
             self._session.setCamera(None)
@@ -40,6 +40,22 @@ class CameraView(QWidget):
             return
 
         camera = QCamera(device, self)
+        if resolution and "x" in resolution:
+            try:
+                width, height = (int(part) for part in resolution.split("x", 1))
+                selected_format = next(
+                    (
+                        camera_format
+                        for camera_format in device.videoFormats()
+                        if camera_format.resolution().width() == width
+                        and camera_format.resolution().height() == height
+                    ),
+                    None,
+                )
+                if selected_format is not None:
+                    camera.setCameraFormat(selected_format)
+            except ValueError:
+                pass
         camera.errorOccurred.connect(self._on_camera_error)
         self._camera = camera
         self._session.setCamera(camera)

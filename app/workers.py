@@ -31,3 +31,18 @@ class IdentifyWorker(QThread):
             self.failed.emit(message[:500] or "Identification failed. Please try again.")
             return
         self.succeeded.emit(result)
+
+
+class ConnectionTestWorker(QThread):
+    completed = Signal(bool, str)
+
+    def __init__(self, provider: VisionProvider, parent=None) -> None:
+        super().__init__(parent)
+        self._provider = provider
+
+    def run(self) -> None:
+        try:
+            passed, message = self._provider.test_connection()
+        except Exception as exc:
+            passed, message = False, str(exc)[:500]
+        self.completed.emit(bool(passed), str(message))

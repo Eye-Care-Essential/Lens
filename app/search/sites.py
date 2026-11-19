@@ -1,45 +1,39 @@
 from __future__ import annotations
 
 import webbrowser
-from dataclasses import dataclass
 from urllib.parse import quote
 
 from PySide6.QtCore import QTimer
 
 from app.ai.base import ProductResult
+from app.config import SearchConfig
 
 
-@dataclass(frozen=True)
-class SearchSite:
-    name: str
-    template: str
-    language: str
-
-
-SEARCH_SITES = (
-    SearchSite("Google Shopping", "https://www.google.com/search?tbm=shop&q={q}", "en"),
-    SearchSite("BigGo", "https://biggo.com.tw/s/?q={q}", "zh"),
-    SearchSite("feebee 飛比", "https://feebee.com.tw/s/?q={q}", "zh"),
-    SearchSite("momo", "https://www.momoshop.com.tw/search/searchShop.jsp?keyword={q}", "zh"),
-    SearchSite("PChome 24h", "https://24h.pchome.com.tw/search/?q={q}", "zh"),
-    SearchSite("Shopee 蝦皮", "https://shopee.tw/search?keyword={q}", "zh"),
-    SearchSite("Ruten 露天", "https://www.ruten.com.tw/find/?q={q}", "zh"),
-)
-
-
-def build_search_urls(product: ProductResult) -> list[str]:
+def build_search_urls(product: ProductResult, config: SearchConfig | None = None) -> list[str]:
+    config = config or SearchConfig()
     urls = []
-    for site in SEARCH_SITES:
-        query = product.query_en if site.language == "en" else product.query_zh
+    for site in config.sites:
+        if not site.enabled or "{q}" not in site.url_template:
+            continue
+        query = product.query_en if site.query_field == "en" else product.query_zh
         if not query:
             query = product.query_zh or product.query_en
-        urls.append(site.template.format(q=quote(query, safe="")))
+        if config.secondhand_mode and site.id in {"shopee", "ruten"}:
+            query = f"{query} 二手"
+        try:
+            urls.append(site.url_template.format(q=quote(query, safe="")))
+        except (KeyError, ValueError):
+            continue
     return urls
 
 
-def open_search_tabs(product: ProductResult, delay_ms: int = 150) -> int:
-    """Open the seven configured searches with a short gap between browser tabs."""
-    urls = build_search_urls(product)
+def open_search_tabs(
+    product: ProductResult,
+    config: SearchConfig | None = None,
+    delay_ms: int = 150,
+) -> int:
+    """Open enabled search pages with a short gap between browser tabs."""
+    urls = build_search_urls(product, config)
     for index, url in enumerate(urls):
         QTimer.singleShot(index * delay_ms, lambda target=url: _open_tab(target))
     return len(urls)
