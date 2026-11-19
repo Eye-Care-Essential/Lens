@@ -1,39 +1,67 @@
 # PriceLens
 
-PriceLens is a Windows desktop app for identifying a product from a live camera
-image and opening price-comparison searches. The app opens search pages; it does
-not collect prices.
+PriceLens identifies a product from a live camera image and opens enabled
+price-comparison searches in your browser. It does not collect prices.
 
-## Current features
+## Download and install
 
-- Live camera preview, camera selection, and configurable resolution.
-- Manual identification with the **Identify now** button or SPACE shortcut.
-- Hands-free detection with a motion trigger, empty-scene reference, duplicate
-  filter, cooldown, and optional barcode hint.
-- Vision identification through Claude, Gemini, OpenAI, or a custom
-  OpenAI-compatible endpoint.
-- Editable search sites and query languages, with an optional second-hand search
-  suffix for Shopee and Ruten.
-- Local history with thumbnails, query replay, copy, and delete actions.
-- A Self-Test dialog for camera, internet, provider credentials, browser,
-  barcode support, and config-folder access.
-- Settings import/export. Exported configuration files include API keys; keep
-  them private.
+PriceLens runs on 64-bit Windows 11 and does not require Python.
 
-AI requests run in a worker thread. Each successful identification opens the
-enabled search URLs in the default browser. API keys and history are stored
-locally beside the app config (or in the user application-data folder if the
-app directory is read-only).
+### Recommended: setup program
 
-## API keys
+1. Open the repository's **Releases** page and download
+   `PriceLens-Setup-vX.Y.Z.exe` from the latest release.
+2. Run the setup program. It installs PriceLens for your Windows user and adds a
+   Start menu shortcut. A desktop shortcut is optional.
+3. Start PriceLens from the Start menu.
 
-Add a key for the selected provider in **Settings → AI**, then use **Test
-connection** to check the key and model. For a custom OpenAI-compatible API,
-also enter its base URL. **Self-Test** repeats a minimal provider request and
-reports authentication failures with a plain-language hint.
+### Portable version
 
-## Development
+1. Download `PriceLens-portable-vX.Y.Z.zip` from **Releases**.
+2. Extract the ZIP to a folder you can write to.
+3. Open the extracted `PriceLens` folder and run `PriceLens.exe`.
 
-Requires Python 3.12 on Windows. Install dependencies from `requirements.txt`,
-then launch the GUI with `python -m app.main` from this directory. Packaging and
-a GUI installer are planned for M4.
+Your settings, API keys, and history are kept next to the app when that folder is
+writable. Otherwise, PriceLens stores them in your Windows application data
+folder. Keep exported configuration files private because they contain API keys.
+
+## Build from GitHub Actions
+
+To create a build without using a command line:
+
+1. Open the repository on GitHub and select **Actions**.
+2. Choose **Windows release** and select **Run workflow**.
+3. Enter a version such as `1.0.0`, then select **Run workflow**.
+4. When the run completes, open it and download the
+   `PriceLens-Windows-v1.0.0` artifact.
+
+Tagging a version as `vX.Y.Z` also builds and publishes the ZIP and setup program
+on the repository's **Releases** page.
+
+## First launch
+
+PriceLens opens its Self-Test on the first launch. Connect a camera, select the
+AI provider you want under **Settings → AI**, enter its API key, and use **Test
+connection**. The camera preview, provider, browser, internet, barcode, and
+configuration checks are also available later from **Self-Test**.
+
+Press **Identify now** or **SPACE** to identify the current frame. For hands-free
+use, select **Start Detection** and place an item in view. PriceLens opens search
+pages in the default browser and does not scrape listings. Any original-price
+figure it displays is an AI estimate.
+
+## Included features
+
+- Claude, Gemini, OpenAI, and custom OpenAI-compatible vision providers.
+- Camera selection and resolution, motion detection, optional barcode hints, and
+  duplicate/cooldown handling.
+- Editable shopping sites, second-hand search mode, and AI identification
+  history with replay, copy, and delete actions.
+- Settings import/export and a camera/provider Self-Test.
+
+## Source development
+
+The source project uses Python 3.12. Install `requirements.txt` and run
+`python -m app.main` from the repository directory. The Windows release workflow
+builds the onedir executable with PyInstaller and creates the installer with
+Inno Setup.
