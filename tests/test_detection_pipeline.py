@@ -41,17 +41,17 @@ class DetectionPipelineAcceptanceTests(unittest.TestCase):
 
         for index in range(5):
             item = _item_frame(index + 10)
-            item_start = 500 + index * 1200
+            item_start = 500 + index * 6500
             update = self._place_item(item, item_start)
             self.assertTrue(update.triggered, update.ignored_reason)
             triggers += 1
 
-            for offset in range(200, 800, 100):
+            for offset in range(200, 6100, 100):
                 still = self.pipeline.update(item, item_start + offset)
                 self.assertFalse(still.triggered)
 
         self.assertEqual(triggers, 5)
-        removal_time = 500 + 4 * 1200 + 900
+        removal_time = 500 + 4 * 6500 + 6100
         self.assertEqual(self.pipeline.update(self.empty, removal_time).state, MotionState.MOTION)
         self.assertEqual(self.pipeline.update(self.empty, removal_time + 50).state, MotionState.STABLE)
         removal = self.pipeline.update(self.empty, removal_time + 151)
