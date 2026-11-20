@@ -83,7 +83,8 @@ class MainWindow(QMainWindow):
         row.addWidget(controls, 3)
 
         self.camera_combo.currentIndexChanged.connect(self._select_camera)
-        self.refresh_button.clicked.connect(self._refresh_cameras)
+        # lambda: clicked sends checked=False, which would become preferred_id.
+        self.refresh_button.clicked.connect(lambda: self._refresh_cameras())
         self.identify_button.clicked.connect(self.identify_now)
         self.settings_button.clicked.connect(self._open_settings)
         self.camera_view.camera_error.connect(self._show_camera_error)
@@ -203,4 +204,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt override
         self.camera_view.stop()
+        if self._worker is not None:
+            self._worker.wait()  # destroying a running QThread aborts the app
         super().closeEvent(event)
