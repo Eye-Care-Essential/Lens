@@ -80,7 +80,7 @@ class HistoryStore:
         max_entries: int = 200,
     ) -> HistoryEntry:
         return self._add(
-            thumbnail_bytes, max_entries, name_zh="Identification failed",
+            thumbnail_bytes, max_entries, name_zh="辨識失敗",
             barcode=barcode, provider=provider, status="failed", error=error,
         )
 

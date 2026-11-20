@@ -96,7 +96,7 @@ def test_history_persists_entries_and_deletes_thumbnail(tmp_path: Path):
 
 def test_provider_self_test_marks_authentication_errors():
     result = provider_failure_hint("HTTP 401 Unauthorized: invalid api_key")
-    assert "rejected the API key" in result
+    assert "拒絕接受 API 金鑰" in result
 
 
 def test_history_failure_entry_and_trim_removes_oldest_thumbnail(tmp_path: Path):
@@ -104,7 +104,7 @@ def test_history_failure_entry_and_trim_removes_oldest_thumbnail(tmp_path: Path)
     store = HistoryStore(tmp_path)
     failed = store.add_failure("timeout", b"a", "", "claude", max_entries=1)
     old_thumb = store.thumbnail_path(failed)
-    assert failed.status == "failed" and failed.name_zh == "Identification failed" and failed.query_zh == ""
+    assert failed.status == "failed" and failed.name_zh == "辨識失敗" and failed.query_zh == ""
 
     store.add_success(product, b"b", "", "gemini", max_entries=1)
 

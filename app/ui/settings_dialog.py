@@ -29,16 +29,18 @@ from PySide6.QtWidgets import (
 )
 
 from app.ai.factory import create_provider
+from app.ai.response import provider_failure_hint
 from app.camera.camera_view import CameraView, device_id
 from app.config import AppConfig, DEFAULT_MODELS, PROVIDER_IDS, SearchSiteConfig
 from app.paths import config_path
+from app.ui.messages import show_message
 from app.workers import ConnectionTestWorker
 
 PROVIDER_LABELS = {
     "claude": "Claude",
     "gemini": "Gemini",
     "openai": "OpenAI",
-    "custom": "Custom / OpenAI-compatible",
+    "custom": "自訂（相容 OpenAI）",
 }
 
 
@@ -50,20 +52,22 @@ class SettingsDialog(QDialog):
         self._devices: list[QCameraDevice] = []
         self._current_provider_id = self.config.active_provider
         self._test_worker: ConnectionTestWorker | None = None
-        self.setWindowTitle("PriceLens settings")
+        self.setWindowTitle("PriceLens 設定")
         self.setModal(True)
         self.resize(820, 650)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._build_ai_tab(), "AI")
-        self.tabs.addTab(self._build_camera_tab(), "Camera")
-        self.tabs.addTab(self._build_sites_tab(), "Sites")
-        self.tabs.addTab(self._build_detection_tab(), "Detection")
-        self.tabs.addTab(self._build_general_tab(), "General")
+        self.tabs.addTab(self._build_ai_tab(), "AI 供應商")
+        self.tabs.addTab(self._build_camera_tab(), "相機")
+        self.tabs.addTab(self._build_sites_tab(), "搜尋網站")
+        self.tabs.addTab(self._build_detection_tab(), "偵測")
+        self.tabs.addTab(self._build_general_tab(), "一般")
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
         self.save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
         self.cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        self.save_button.setText("儲存")
+        self.cancel_button.setText("取消")
         self.buttons.accepted.connect(self._accept_settings)
         self.buttons.rejected.connect(self.reject)
         layout = QVBoxLayout(self)
@@ -81,30 +85,31 @@ class SettingsDialog(QDialog):
         self.api_key = QLineEdit()
         self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
         self.api_key.setClearButtonEnabled(True)
-        self.show_key = QCheckBox("Show key")
+        self.show_key = QCheckBox("顯示金鑰")
         key_row = QHBoxLayout()
         key_row.addWidget(self.api_key, 1)
         key_row.addWidget(self.show_key)
         self.model = QLineEdit()
-        self.default_model_button = QPushButton("Default")
+        self.default_model_button = QPushButton("使用預設值")
         model_row = QHBoxLayout()
         model_row.addWidget(self.model, 1)
         model_row.addWidget(self.default_model_button)
         self.base_url = QLineEdit()
-        self.base_url_label = QLabel("Base URL")
+        self.base_url_label = QLabel("基礎網址")
         self.timeout = QSpinBox()
         self.timeout.setRange(1, 300)
-        self.timeout.setSuffix(" sec")
-        form.addRow("Active provider", self.provider_combo)
-        form.addRow("API key", key_row)
-        form.addRow("Model", model_row)
+        self.timeout.setSuffix(" 秒")
+        form.addRow("目前的供應商", self.provider_combo)
+        form.addRow("API 金鑰", key_row)
+        form.addRow("模型", model_row)
         form.addRow(self.base_url_label, self.base_url)
-        form.addRow("Request timeout", self.timeout)
+        form.addRow("請求逾時", self.timeout)
         outer.addLayout(form)
 
         test_row = QHBoxLayout()
-        self.test_button = QPushButton("Test connection")
+        self.test_button = QPushButton("測試連線")
         self.test_result = QLabel("")
+        self.test_result.setTextFormat(Qt.TextFormat.PlainText)
         self.test_result.setWordWrap(True)
         test_row.addWidget(self.test_button)
         test_row.addWidget(self.test_result, 1)
@@ -122,19 +127,19 @@ class SettingsDialog(QDialog):
         outer = QVBoxLayout(tab)
         form = QFormLayout()
         self.camera_combo = QComboBox()
-        self.camera_refresh_button = QPushButton("Refresh devices")
+        self.camera_refresh_button = QPushButton("重新整理裝置")
         camera_row = QHBoxLayout()
         camera_row.addWidget(self.camera_combo, 1)
         camera_row.addWidget(self.camera_refresh_button)
         self.resolution_combo = QComboBox()
         self.resolution_combo.addItems(["640x480", "1280x720", "1920x1080"])
-        form.addRow("Camera", camera_row)
-        form.addRow("Resolution", self.resolution_combo)
+        form.addRow("相機", camera_row)
+        form.addRow("解析度", self.resolution_combo)
         outer.addLayout(form)
         self.camera_preview = CameraView()
         self.camera_preview.preview.setMinimumSize(360, 200)
         self.camera_preview.preview.setMaximumHeight(280)
-        outer.addWidget(QLabel("Selected camera preview"))
+        outer.addWidget(QLabel("相機預覽"))
         outer.addWidget(self.camera_preview, 1)
         self.camera_refresh_button.clicked.connect(self._refresh_devices)
         self.camera_combo.currentIndexChanged.connect(self._preview_selected_camera)
@@ -144,17 +149,17 @@ class SettingsDialog(QDialog):
     def _build_sites_tab(self) -> QWidget:
         tab = QWidget()
         outer = QVBoxLayout(tab)
-        self.secondhand_mode = QCheckBox("Add 二手 to Shopee and Ruten searches")
+        self.secondhand_mode = QCheckBox("搜尋 Shopee 蝦皮與 Ruten 露天時加入「二手」")
         outer.addWidget(self.secondhand_mode)
         self.sites_table = QTableWidget(0, 4)
-        self.sites_table.setHorizontalHeaderLabels(["Enabled", "Site", "Query", "URL template"])
+        self.sites_table.setHorizontalHeaderLabels(["啟用", "網站", "搜尋語言", "網址範本"])
         self.sites_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.sites_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.sites_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.sites_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         outer.addWidget(self.sites_table, 1)
         test_site_row = QHBoxLayout()
-        self.test_site_button = QPushButton("Test open selected site")
+        self.test_site_button = QPushButton("測試開啟所選網站")
         test_site_row.addWidget(self.test_site_button)
         test_site_row.addStretch(1)
         outer.addLayout(test_site_row)
@@ -171,21 +176,21 @@ class SettingsDialog(QDialog):
         self.motion_threshold.setSingleStep(0.005)
         self.stable_ms = QSpinBox()
         self.stable_ms.setRange(100, 30000)
-        self.stable_ms.setSuffix(" ms")
+        self.stable_ms.setSuffix(" 毫秒")
         self.cooldown_ms = QSpinBox()
         self.cooldown_ms.setRange(0, 60000)
-        self.cooldown_ms.setSuffix(" ms")
+        self.cooldown_ms.setSuffix(" 毫秒")
         self.dedupe_hamming = QSpinBox()
         self.dedupe_hamming.setRange(0, 64)
-        self.barcode_enabled = QCheckBox("Try to decode a visible barcode")
-        self.reset_background_button = QPushButton("Reset background now")
-        self.background_message = QLabel("The current preview becomes the empty-scene reference when saved.")
+        self.barcode_enabled = QCheckBox("嘗試讀取畫面中的條碼")
+        self.reset_background_button = QPushButton("重設背景")
+        self.background_message = QLabel("儲存後會將目前的預覽畫面設為無商品時的背景。")
         self.background_message.setWordWrap(True)
-        form.addRow("Motion threshold", self.motion_threshold)
-        form.addRow("Still time before trigger", self.stable_ms)
-        form.addRow("Auto-trigger cooldown", self.cooldown_ms)
-        form.addRow("Duplicate distance", self.dedupe_hamming)
-        form.addRow("Barcode", self.barcode_enabled)
+        form.addRow("動作偵測門檻", self.motion_threshold)
+        form.addRow("觸發前的靜止時間", self.stable_ms)
+        form.addRow("自動偵測冷卻時間", self.cooldown_ms)
+        form.addRow("重複判定門檻", self.dedupe_hamming)
+        form.addRow("條碼", self.barcode_enabled)
         outer.addLayout(form)
         outer.addWidget(self.reset_background_button)
         outer.addWidget(self.background_message)
@@ -201,20 +206,20 @@ class SettingsDialog(QDialog):
         self.max_history.setRange(1, 10000)
         self.open_tabs_delay = QSpinBox()
         self.open_tabs_delay.setRange(0, 5000)
-        self.open_tabs_delay.setSuffix(" ms")
-        form.addRow("Maximum history entries", self.max_history)
-        form.addRow("Delay between search tabs", self.open_tabs_delay)
+        self.open_tabs_delay.setSuffix(" 毫秒")
+        form.addRow("紀錄筆數上限", self.max_history)
+        form.addRow("開啟搜尋分頁的間隔", self.open_tabs_delay)
         outer.addLayout(form)
 
         buttons = QHBoxLayout()
-        self.export_button = QPushButton("Export config")
-        self.import_button = QPushButton("Import config")
-        self.open_config_button = QPushButton("Open config folder")
+        self.export_button = QPushButton("匯出設定")
+        self.import_button = QPushButton("匯入設定")
+        self.open_config_button = QPushButton("開啟設定資料夾")
         buttons.addWidget(self.export_button)
         buttons.addWidget(self.import_button)
         buttons.addWidget(self.open_config_button)
         outer.addLayout(buttons)
-        self.config_warning = QLabel("Exported config includes API keys. Keep the file private.")
+        self.config_warning = QLabel("匯出的設定檔內含 API 金鑰，請妥善保管。")
         self.config_warning.setWordWrap(True)
         outer.addWidget(self.config_warning)
         outer.addStretch(1)
@@ -280,11 +285,17 @@ class SettingsDialog(QDialog):
     def _test_connection(self) -> None:
         self._store_provider_fields(self._current_provider_id)
         self.config.active_provider = self._current_provider_id
+        settings = self.config.providers[self._current_provider_id]
+        if not settings.api_key:
+            self._show_connection_result(False, "請輸入所選供應商的 API 金鑰。")
+            return
+        if self._current_provider_id == "custom" and not settings.base_url:
+            self._show_connection_result(False, "請輸入自訂供應商的基礎網址。")
+            return
         try:
             provider = create_provider(self.config)
         except Exception as exc:
-            self.test_result.setStyleSheet("color: #b42318;")
-            self.test_result.setText(str(exc))
+            self._connection_test_finished(False, str(exc))
             return
         self._test_worker = ConnectionTestWorker(provider, self)
         self._test_worker.completed.connect(self._connection_test_finished)
@@ -295,12 +306,15 @@ class SettingsDialog(QDialog):
         for widget in (self.provider_combo, self.api_key, self.show_key, self.model, self.default_model_button, self.base_url, self.timeout):
             widget.setEnabled(False)
         self.test_result.setStyleSheet("")
-        self.test_result.setText("Testing…")
+        self.test_result.setText("測試中…")
         self._test_worker.start()
 
     def _connection_test_finished(self, passed: bool, message: str) -> None:
+        self._show_connection_result(passed, "連線成功。" if passed else provider_failure_hint(message))
+
+    def _show_connection_result(self, passed: bool, message: str) -> None:
         self.test_result.setStyleSheet("color: #18794e;" if passed else "color: #b42318;")
-        self.test_result.setText(("✅ " if passed else "❌ ") + (message or ("Connection succeeded." if passed else "Connection failed.")))
+        self.test_result.setText(("✅ " if passed else "❌ ") + message)
 
     def _release_test_worker(self) -> None:
         worker = self._test_worker
@@ -323,12 +337,12 @@ class SettingsDialog(QDialog):
         for device in self._devices:
             self.camera_combo.addItem(device.description(), device)
         if not self._devices:
-            self.camera_combo.addItem("No camera found", "")
+            self.camera_combo.addItem("找不到相機", "")
             selected = 0
         else:
             selected = next((i for i, device in enumerate(self._devices) if device_id(device) == preferred_id), -1)
             if selected < 0 and preferred_id:
-                self.camera_combo.insertItem(0, "Saved camera unavailable", f"__missing__:{preferred_id}")
+                self.camera_combo.insertItem(0, "已儲存的相機無法使用", f"__missing__:{preferred_id}")
                 selected = 0
             elif selected < 0:
                 selected = 0
@@ -350,8 +364,8 @@ class SettingsDialog(QDialog):
             self.sites_table.setCellWidget(row, 0, enabled)
             self.sites_table.setItem(row, 1, QTableWidgetItem(site.name))
             query_field = QComboBox()
-            query_field.addItem("Traditional Chinese", "zh")
-            query_field.addItem("English", "en")
+            query_field.addItem("繁體中文", "zh")
+            query_field.addItem("英文", "en")
             query_field.setCurrentIndex(0 if site.query_field == "zh" else 1)
             self.sites_table.setCellWidget(row, 2, query_field)
             self.sites_table.setItem(row, 3, QTableWidgetItem(site.url_template))
@@ -366,7 +380,7 @@ class SettingsDialog(QDialog):
             if not template:
                 template = old_site.url_template
             if "{q}" not in template:
-                QMessageBox.warning(self, "Invalid URL template", f"{old_site.name} needs a {{q}} placeholder.")
+                show_message(self, QMessageBox.Icon.Warning, "網址範本無效", f"{old_site.name} 的網址範本必須包含 {{q}} 預留位置。")
                 raise ValueError("Invalid search URL template")
             sites.append(SearchSiteConfig(
                 id=old_site.id,
@@ -389,16 +403,16 @@ class SettingsDialog(QDialog):
         template = self.sites_table.item(row, 3)
         url_template = template.text().strip() if template else ""
         if "{q}" not in url_template:
-            QMessageBox.warning(self, "Invalid URL template", "The URL template needs a {q} placeholder.")
+            show_message(self, QMessageBox.Icon.Warning, "網址範本無效", "網址範本必須包含 {q} 預留位置。")
             return
         try:
             webbrowser.open_new_tab(url_template.format(q=quote("iPhone 13", safe="")))
         except Exception as exc:
-            QMessageBox.warning(self, "Could not open browser", str(exc))
+            show_message(self, QMessageBox.Icon.Warning, "無法開啟瀏覽器", f"無法開啟瀏覽器：{exc}")
 
     def _request_background_reset(self) -> None:
         self.reset_background_requested = True
-        self.background_message.setText("Background will reset to the live camera view when Settings is saved.")
+        self.background_message.setText("儲存設定後，會將目前的相機畫面設為背景。")
 
     def _collect_config(self) -> AppConfig:
         self._store_provider_fields(self._current_provider_id)
@@ -407,9 +421,9 @@ class SettingsDialog(QDialog):
         device = self.camera_combo.currentData()
         if isinstance(device, QCameraDevice):
             self.config.camera_device_id = device_id(device)
-        elif self.camera_combo.currentText() == "Saved camera unavailable":
-            self.config.camera_device_id = str(device).removeprefix("__missing__:")
-        elif self.camera_combo.currentText() != "No camera found":
+        elif isinstance(device, str) and device.startswith("__missing__:"):
+            self.config.camera_device_id = device.removeprefix("__missing__:")
+        elif device != "":
             self.config.camera_device_id = ""
         self.config.camera_resolution = self.resolution_combo.currentText()
         self.config.search.secondhand_mode = self.secondhand_mode.isChecked()
@@ -428,24 +442,26 @@ class SettingsDialog(QDialog):
             config = self._collect_config()
         except ValueError:
             return
-        filename, _ = QFileDialog.getSaveFileName(self, "Export config", "PriceLens-config.json", "JSON files (*.json)")
+        filename, _ = QFileDialog.getSaveFileName(self, "匯出設定", "PriceLens-config.json", "JSON 檔案 (*.json)")
         if not filename:
             return
         try:
             config.export_to(filename)
-            QMessageBox.information(self, "Config exported", "Config exported. The file contains API keys; keep it private.")
+            show_message(self, QMessageBox.Icon.Information, "已匯出設定", "已匯出設定。檔案內含 API 金鑰，請妥善保管。")
         except OSError as exc:
-            QMessageBox.warning(self, "Export failed", str(exc))
+            show_message(self, QMessageBox.Icon.Warning, "匯出失敗", f"無法匯出設定檔：{exc}")
 
     def _import_config(self) -> None:
-        filename, _ = QFileDialog.getOpenFileName(self, "Import config", "", "JSON files (*.json)")
+        filename, _ = QFileDialog.getOpenFileName(self, "匯入設定", "", "JSON 檔案 (*.json)")
         if not filename:
             return
         try:
             self.config = AppConfig.import_from(filename)
             self._load_all_controls()
-        except (OSError, ValueError) as exc:
-            QMessageBox.warning(self, "Import failed", f"Could not import this config file: {exc}")
+        except OSError as exc:
+            show_message(self, QMessageBox.Icon.Warning, "匯入失敗", f"無法匯入此設定檔：{exc}")
+        except ValueError:
+            show_message(self, QMessageBox.Icon.Warning, "匯入失敗", "請確認設定檔的內容是有效的 JSON 物件。")
 
     def _open_config_folder(self) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(config_path().parent)))

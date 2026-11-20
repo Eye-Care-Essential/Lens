@@ -20,8 +20,10 @@ class CameraView(QWidget):
         self._session.setVideoSink(self._sink)
         self._sink.videoFrameChanged.connect(self._on_video_frame)
 
-        self.preview = QLabel("Select a camera to start live preview")
+        self.preview = QLabel("選擇相機以開啟即時預覽")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview.setTextFormat(Qt.TextFormat.PlainText)
+        self.preview.setWordWrap(True)
         self.preview.setMinimumSize(480, 320)
         self.preview.setStyleSheet("background: #171a20; color: #d6d8dc; border: 1px solid #454a54;")
         layout = QVBoxLayout(self)
@@ -37,7 +39,7 @@ class CameraView(QWidget):
         self._image = None
         self.frame_count = 0
         self.preview.clear()
-        self.preview.setText("Select a camera to start live preview" if device is None else "Starting camera…")
+        self.preview.setText("選擇相機以開啟即時預覽" if device is None else "正在啟動相機…")
         if device is None:
             return
 
@@ -103,8 +105,8 @@ class CameraView(QWidget):
             )
 
     def _on_camera_error(self, _error: object, message: str) -> None:
-        clean_message = message.strip() or "Camera could not be opened."
-        self.preview.setText(f"Camera unavailable\n{clean_message}")
+        clean_message = message.strip() or "無法開啟相機。"
+        self.preview.setText(f"相機無法使用\n{clean_message}")
         self.camera_error.emit(clean_message)
 
 
