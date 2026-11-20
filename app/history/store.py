@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.ai.base import ProductResult
+from app.config import write_json_atomic
 from app.paths import app_data_dir
 
 
@@ -152,11 +153,7 @@ class HistoryStore:
         self._write()
 
     def _write(self) -> None:
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.history_path.write_text(
-            json.dumps([asdict(entry) for entry in self.entries], ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        write_json_atomic(self.history_path, [asdict(entry) for entry in self.entries])
 
     def _delete_thumbnail(self, filename: str) -> None:
         if not filename:

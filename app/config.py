@@ -188,11 +188,11 @@ class AppConfig:
         """Write atomically; if the app folder is read-only, use the fallback path."""
         path = config_path()
         try:
-            self._write(path, self.to_dict())
+            write_json_atomic(path, self.to_dict())
             return path
         except OSError:
             _, fallback = self._candidate_paths()
-            self._write(fallback, self.to_dict())
+            write_json_atomic(fallback, self.to_dict())
             return fallback
 
     @classmethod
@@ -211,21 +211,22 @@ class AppConfig:
 
         return _config_candidates()
 
-    @staticmethod
-    def _write(path: Path, payload: dict[str, Any]) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temp_name = tempfile.mkstemp(prefix="config-", suffix=".tmp", dir=path.parent)
+
+def write_json_atomic(path: Path, payload: Any) -> None:
+    """Write to a temp file, then swap it in, so a crash never leaves a half-written file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f"{path.stem}-", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2)
+            stream.write("\n")
+        Path(temp_name).replace(path)
+    except Exception:
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                json.dump(payload, stream, ensure_ascii=False, indent=2)
-                stream.write("\n")
-            Path(temp_name).replace(path)
-        except Exception:
-            try:
-                Path(temp_name).unlink(missing_ok=True)
-            except OSError:
-                pass
-            raise
+            Path(temp_name).unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def _load_sites(values: object) -> list[SearchSiteConfig]:

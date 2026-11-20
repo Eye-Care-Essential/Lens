@@ -52,7 +52,7 @@ class MainWindow(QMainWindow):
         self._auto_pipeline: AutoDetectionPipeline | None = None
         self._needs_background = False
         self._last_detection_frame_ms = 0
-        self._pending_jpeg = b""
+        self._pending_thumb = b""
         self._pending_barcode = ""
         self._pending_provider = ""
         self._session_calls = 0
@@ -424,7 +424,9 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.statusBar().showMessage(str(exc), 10000)
             return
-        self._pending_jpeg = jpeg_bytes
+        # History shows 64x48 icons; storing the full photo made every refresh decode 200 big JPEGs.
+        thumb = image.scaled(160, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self._pending_thumb = image_to_jpeg(thumb) or b""
         self._pending_barcode = barcode or ""
         self._pending_provider = self.config.active_provider
         worker = IdentifyWorker(provider, jpeg_bytes, self.config.providers[self.config.active_provider].api_key, barcode=barcode, parent=self)
@@ -441,7 +443,7 @@ class MainWindow(QMainWindow):
 
     def _record_success(self, product: ProductResult) -> None:
         try:
-            self.history_store.add_success(product, self._pending_jpeg, self._pending_barcode, self._pending_provider, self.config.general.max_history)
+            self.history_store.add_success(product, self._pending_thumb, self._pending_barcode, self._pending_provider, self.config.general.max_history)
             self._refresh_history()
         except OSError as exc:
             self.statusBar().showMessage(f"History could not be saved: {exc}", 5000)
@@ -467,7 +469,7 @@ class MainWindow(QMainWindow):
         self.result_label.setText("Identification failed. Check the key or connection and try again.")
         self.detection_state_label.setText(MotionState.IDLE.value if self._auto_detection_enabled else "STOPPED")
         try:
-            self.history_store.add_failure(message, self._pending_jpeg, self._pending_barcode, self._pending_provider, self.config.general.max_history)
+            self.history_store.add_failure(message, self._pending_thumb, self._pending_barcode, self._pending_provider, self.config.general.max_history)
             self._refresh_history()
         except OSError as exc:
             self.statusBar().showMessage(f"History could not be saved: {exc}", 5000)
