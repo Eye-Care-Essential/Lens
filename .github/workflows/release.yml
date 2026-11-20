@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version:
@@ -13,11 +16,14 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-windows:
     runs-on: windows-latest
+    timeout-minutes: 35
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -39,17 +45,21 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean pricelens.spec
 
       - name: Set release version
+        id: version
         shell: pwsh
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
         run: |
-          if ("${{ github.event_name }}" -eq "push") {
-            $version = "${{ github.ref_name }}".TrimStart('v')
-          } else {
-            $version = "${{ inputs.version }}".TrimStart('v')
+          switch ($env:GITHUB_EVENT_NAME) {
+            "push" { $version = $env:GITHUB_REF_NAME -creplace '^v', '' }
+            "workflow_dispatch" { $version = $env:MANUAL_VERSION -creplace '^v', '' }
+            default { $version = "0.0.0" }
           }
           if ($version -notmatch '^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$') {
             throw "Version must look like 1.2.3. Received: $version"
           }
-          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "APP_VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create portable archive
         shell: pwsh
@@ -68,39 +78,44 @@ jobs:
           & $compiler "/DAppVersion=$env:APP_VERSION" "installer\pricelens.iss"
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
 
-      - name: Smoke test portable executable
+      - name: Smoke test portable ZIP and installed app
         shell: pwsh
         run: |
-          function Test-PriceLensStart([string]$Executable, [string]$WorkingDirectory) {
-            $config = '{"ai":{"provider":"gemini","gemini":{"api_key":"","model":"gemini-3.8-flash"}},"camera":{"device_id":"","resolution":"1280x720"},"detection":{"auto_enabled":false}}'
-            Set-Content -Path (Join-Path $WorkingDirectory "config.json") -Value $config -Encoding ascii
-            $process = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -PassThru
-            Start-Sleep -Seconds 8
-            $process.Refresh()
-            if ($process.HasExited) { throw "PriceLens exited during startup with code $($process.ExitCode)" }
-            Stop-Process -Id $process.Id -Force
-          }
-          $portableDir = Join-Path $env:RUNNER_TEMP "PriceLens-portable-smoke"
-          New-Item -ItemType Directory -Path $portableDir -Force | Out-Null
-          Copy-Item -Path "dist\PriceLens\*" -Destination $portableDir -Recurse -Force
-          Test-PriceLensStart (Join-Path $portableDir "PriceLens.exe") $portableDir
+          # Launch from the packaged runtime without Python on PATH.
+          $env:Path = ($env:Path -split ';' | Where-Object { $_ -notmatch 'python|conda' }) -join ';'
+          Remove-Item Env:PYTHONHOME, Env:PYTHONPATH -ErrorAction SilentlyContinue
 
-      - name: Smoke test installed executable
-        shell: pwsh
-        run: |
+          function Test-PriceLensStart([string]$Directory) {
+            $executable = Join-Path $Directory "PriceLens.exe"
+            if (-not (Test-Path $executable)) { throw "Missing packaged executable: $executable" }
+            Set-Content -Path (Join-Path $Directory "config.json") -Value '{}' -Encoding ascii
+            $process = Start-Process -FilePath $executable -WorkingDirectory $Directory -PassThru
+            try {
+              $deadline = (Get-Date).AddSeconds(30)
+              do {
+                $process.Refresh()
+                if ($process.HasExited) { throw "PriceLens exited during startup with code $($process.ExitCode)" }
+                if ($process.MainWindowTitle -eq "PriceLens" -and $process.Responding) { return }
+                Start-Sleep -Milliseconds 500
+              } while ((Get-Date) -lt $deadline)
+              throw "PriceLens did not open a responsive main window. Window title: $($process.MainWindowTitle)"
+            } finally {
+              if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+            }
+          }
+
+          $extractDir = Join-Path $env:RUNNER_TEMP "PriceLens-portable-smoke"
+          Expand-Archive -LiteralPath "dist\PriceLens-portable-v$env:APP_VERSION.zip" -DestinationPath $extractDir
+          Test-PriceLensStart (Join-Path $extractDir "PriceLens")
+
           $setup = "dist\PriceLens-Setup-v$env:APP_VERSION.exe"
           $installDir = Join-Path $env:RUNNER_TEMP "PriceLens-installed-smoke"
-          $installer = Start-Process -FilePath $setup -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$installDir") -PassThru -Wait
+          $setupArguments = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{0}"' -f $installDir
+          $installer = Start-Process -FilePath $setup -ArgumentList $setupArguments -PassThru -Wait
           if ($installer.ExitCode -ne 0) { throw "Silent setup failed with exit code $($installer.ExitCode)" }
-          $config = '{"ai":{"provider":"gemini","gemini":{"api_key":"","model":"gemini-3.8-flash"}},"camera":{"device_id":"","resolution":"1280x720"},"detection":{"auto_enabled":false}}'
-          Set-Content -Path (Join-Path $installDir "config.json") -Value $config -Encoding ascii
-          $process = Start-Process -FilePath (Join-Path $installDir "PriceLens.exe") -WorkingDirectory $installDir -PassThru
-          Start-Sleep -Seconds 8
-          $process.Refresh()
-          if ($process.HasExited) { throw "Installed PriceLens exited during startup with code $($process.ExitCode)" }
-          Stop-Process -Id $process.Id -Force
+          Test-PriceLensStart $installDir
 
-      - name: Upload manual build artifacts
+      - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
           name: PriceLens-Windows-v${{ env.APP_VERSION }}
@@ -110,12 +125,27 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  publish-release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build-windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      APP_VERSION: ${{ needs.build-windows.outputs.version }}
+    steps:
+      - name: Download Windows packages
+        uses: actions/download-artifact@v4
+        with:
+          name: PriceLens-Windows-v${{ env.APP_VERSION }}
+          path: dist
+
       - name: Publish GitHub Release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           name: PriceLens v${{ env.APP_VERSION }}
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             dist/PriceLens-portable-v${{ env.APP_VERSION }}.zip
             dist/PriceLens-Setup-v${{ env.APP_VERSION }}.exe
