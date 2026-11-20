@@ -354,6 +354,10 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Background reset to the current camera view.")
 
     def _on_camera_frame(self, image) -> None:
+        # Webcams send dark frames for about a second while exposure settles;
+        # a background captured then makes the empty table look like an item.
+        if self.camera_view.frame_count < 30:
+            return
         if self._auto_start_pending:
             self._start_detection()
         if not self._auto_detection_enabled or self._auto_pipeline is None:
@@ -370,6 +374,8 @@ class MainWindow(QMainWindow):
             self.detection_state_label.setText(MotionState.IDLE.value)
             self.statusBar().showMessage("Camera ready. New background captured.")
             return
+        if self._worker is not None:
+            return  # a trigger now would be dropped, yet the pipeline would count it as handled
         if now_ms - self._last_detection_frame_ms < 100:
             return
         self._last_detection_frame_ms = now_ms

@@ -14,6 +14,7 @@ class CameraView(QWidget):
         super().__init__(parent)
         self._camera: QCamera | None = None
         self._image: QImage | None = None
+        self.frame_count = 0
         self._session = QMediaCaptureSession(self)
         self._sink = QVideoSink(self)
         self._session.setVideoSink(self._sink)
@@ -34,6 +35,7 @@ class CameraView(QWidget):
             self._camera.deleteLater()
             self._camera = None
         self._image = None
+        self.frame_count = 0
         self.preview.clear()
         self.preview.setText("Select a camera to start live preview" if device is None else "Starting camera…")
         if device is None:
@@ -78,6 +80,7 @@ class CameraView(QWidget):
         if image.isNull():
             return
         self._image = image.copy()
+        self.frame_count += 1
         self.frame_changed.emit(self._image.copy())
         pixmap = QPixmap.fromImage(self._image)
         self.preview.setPixmap(
