@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from PySide6.QtCore import Qt, QIODevice, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtMultimedia import QCamera, QCameraDevice, QMediaCaptureSession, QVideoFrame, QVideoSink
@@ -112,6 +114,25 @@ class CameraView(QWidget):
 
 def device_id(device: QCameraDevice | None) -> str:
     return bytes(device.id()).decode("utf-8", errors="replace") if device else ""
+
+
+def camera_label(device: QCameraDevice) -> str:
+    description = device.description()
+    if device.position() in (QCameraDevice.Position.FrontFace, QCameraDevice.Position.BackFace):
+        return f"{description} (Built-in)"
+    return description
+
+
+def choose_camera_index(
+    device_ids: Sequence[str], preferred_id: str, default_id: str
+) -> tuple[int, bool]:
+    """Choose a device and report whether a saved preference is unavailable."""
+    if not device_ids:
+        return -1, False
+    if preferred_id and preferred_id in device_ids:
+        return device_ids.index(preferred_id), False
+    index = device_ids.index(default_id) if default_id in device_ids else 0
+    return index, bool(preferred_id)
 
 
 def image_to_jpeg(source: QImage | None) -> bytes | None:

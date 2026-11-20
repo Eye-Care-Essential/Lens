@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from app.ai.base import ProductResult
 from app.ai.factory import create_provider
-from app.camera.camera_view import CameraView, device_id, image_to_jpeg
+from app.camera.camera_view import CameraView, camera_label, choose_camera_index, device_id, image_to_jpeg
 from app.config import AppConfig
 from app.detection.barcode import BarcodeReader
 from app.detection.image_utils import qimage_to_bgr, small_gray_frame
@@ -97,8 +97,11 @@ class MainWindow(QMainWindow):
         self.camera_combo = QComboBox()
         self.camera_combo.setMinimumWidth(250)
         self.refresh_button = QPushButton("重新整理")
+        self.next_camera_button = QPushButton("下一台相機")
+        self.next_camera_button.setToolTip("切換到下一台相機（C）")
         camera_row.addWidget(self.camera_combo, 1)
         camera_row.addWidget(self.refresh_button)
+        camera_row.addWidget(self.next_camera_button)
         preview_column.addLayout(camera_row)
         self.camera_view = CameraView()
         preview_column.addWidget(self.camera_view, 1)
@@ -153,9 +156,10 @@ class MainWindow(QMainWindow):
         content.addWidget(controls, 3)
         outer.addLayout(content, 1)
 
-        self.camera_combo.currentIndexChanged.connect(self._select_camera)
+        self.camera_combo.activated.connect(self._select_camera)
         # lambda: clicked sends checked=False, which would become preferred_id.
         self.refresh_button.clicked.connect(lambda: self._refresh_cameras())
+        self.next_camera_button.clicked.connect(self._next_camera)
         self.identify_button.clicked.connect(self.identify_now)
         self.detection_button.clicked.connect(self._toggle_detection)
         self.reset_background_button.clicked.connect(self._reset_background)
@@ -170,12 +174,15 @@ class MainWindow(QMainWindow):
         self.space_shortcut = QShortcut(QKeySequence("Space"), self)
         self.space_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
         self.space_shortcut.activated.connect(self.identify_now)
+        self.next_camera_shortcut = QShortcut(QKeySequence("C"), self)
+        self.next_camera_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        self.next_camera_shortcut.activated.connect(self._next_camera)
 
+        self.statusBar().showMessage("就緒")
         self._refresh_cameras(self.config.camera_device_id)
         self._update_provider_label()
         self._update_detection_controls()
         self._refresh_history()
-        self.statusBar().showMessage("就緒")
 
     def _refresh_cameras(self, preferred_id: str | None = None) -> None:
         if preferred_id is None:
@@ -184,37 +191,46 @@ class MainWindow(QMainWindow):
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
         for device in self._devices:
-            self.camera_combo.addItem(device.description(), device)
-        selected = next(
-            (index for index, device in enumerate(self._devices) if device_id(device) == preferred_id),
-            0 if self._devices and not preferred_id else -1,
+            self.camera_combo.addItem(camera_label(device), device)
+        selected, is_fallback = choose_camera_index(
+            [device_id(device) for device in self._devices],
+            preferred_id,
+            device_id(QMediaDevices.defaultVideoInput()) if self._devices else "",
         )
         if not self._devices:
             self.camera_combo.addItem("找不到相機", "")
-            selected = 0
-        elif preferred_id and selected < 0:
-            self.camera_combo.insertItem(0, "已儲存的相機無法使用", "")
-            selected = 0
-        self.camera_combo.setCurrentIndex(selected)
+        self.camera_combo.setCurrentIndex(max(0, selected))
         self.camera_combo.setEnabled(bool(self._devices))
         self.camera_combo.blockSignals(False)
-        self._select_camera(selected)
+        can_cycle = len(self._devices) > 1
+        self.next_camera_button.setEnabled(can_cycle)
+        self.next_camera_shortcut.setEnabled(can_cycle)
+        self._select_camera(selected, persist=not is_fallback)
         if not self._devices:
-            self.camera_view.set_device(None)
             if self._auto_detection_enabled:
                 self._stop_detection(save=False)
             self.statusBar().showMessage("找不到相機。請連接相機後按「重新整理」。")
+        elif is_fallback:
+            label = self.camera_combo.itemText(selected)
+            self.statusBar().showMessage(f"找不到已儲存的相機，已切換至 {label}。")
 
-    def _select_camera(self, index: int) -> None:
+    def _next_camera(self) -> None:
+        count = self.camera_combo.count()
+        if count > 1:
+            index = (self.camera_combo.currentIndex() + 1) % count
+            self.camera_combo.setCurrentIndex(index)
+            self._select_camera(index)
+
+    def _select_camera(self, index: int, persist: bool = True) -> None:
         device = self.camera_combo.itemData(index) if index >= 0 else None
         if not isinstance(device, QCameraDevice):
             device = None
         self.camera_view.set_device(device, self.config.camera_resolution)
-        if device is not None:
+        if device is not None and persist:
             self.config.camera_device_id = device_id(device)
             self._save_config(show_error=False)
         if device:
-            self.camera_name_label.setText(f"相機：{device.description()}")
+            self.camera_name_label.setText(f"相機：{self.camera_combo.itemText(index)}")
         elif self.config.camera_device_id:
             self.camera_name_label.setText("相機：已儲存的裝置無法使用")
         else:
@@ -223,7 +239,7 @@ class MainWindow(QMainWindow):
             self._needs_background = True
             self.statusBar().showMessage("已切換相機。正在擷取新背景…")
         elif device:
-            self.statusBar().showMessage(f"相機：{device.description()}")
+            self.statusBar().showMessage(self.camera_name_label.text())
         if self._auto_start_pending and device is None:
             self.statusBar().showMessage("已儲存的相機未連接。請改選其他相機，或執行自我檢查。")
 
