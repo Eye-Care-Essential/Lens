@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version for the Windows build (for example 1.0.0)"
+        description: "Artifact build version in X.Y.Z format (for example 1.0.1)"
         required: true
         default: "0.0.0"
         type: string
@@ -25,6 +25,24 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      - name: Validate release version
+        id: version
+        shell: pwsh
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          switch ($env:GITHUB_EVENT_NAME) {
+            "push" { $sourceVersion = $env:GITHUB_REF_NAME }
+            "workflow_dispatch" { $sourceVersion = $env:MANUAL_VERSION }
+            default { $sourceVersion = "0.0.0" }
+          }
+          $version = ([string]$sourceVersion).Trim() -creplace '^v', ''
+          if ($version -cnotmatch '^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$') {
+            throw "Invalid version '$sourceVersion'. Enter a complete version such as 1.0.1 or v1.0.1."
+          }
+          "APP_VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
+
       - name: Check out source
         uses: actions/checkout@v4
 
@@ -39,27 +57,10 @@ jobs:
         run: python -m pip install --disable-pip-version-check -r requirements.txt pyinstaller pytest
 
       - name: Run acceptance tests
-        run: python -m pytest -q
+        run: python -X faulthandler -m pytest -q
 
       - name: Build the onedir app
         run: python -m PyInstaller --noconfirm --clean pricelens.spec
-
-      - name: Set release version
-        id: version
-        shell: pwsh
-        env:
-          MANUAL_VERSION: ${{ inputs.version }}
-        run: |
-          switch ($env:GITHUB_EVENT_NAME) {
-            "push" { $version = $env:GITHUB_REF_NAME -creplace '^v', '' }
-            "workflow_dispatch" { $version = $env:MANUAL_VERSION -creplace '^v', '' }
-            default { $version = "0.0.0" }
-          }
-          if ($version -notmatch '^\d+\.\d+\.\d+([.-][0-9A-Za-z.-]+)?$') {
-            throw "Version must look like 1.2.3. Received: $version"
-          }
-          "APP_VERSION=$version" >> $env:GITHUB_ENV
-          "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create portable archive
         shell: pwsh
