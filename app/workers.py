@@ -28,7 +28,7 @@ class IdentifyWorker(QThread):
             result: ProductResult = self._provider.identify(self._jpeg_bytes, self._barcode)
         except Exception as exc:
             message = str(exc).replace(self._api_key, "[hidden]") if self._api_key else str(exc)
-            self.failed.emit(message[:500] or "Identification failed. Please try again.")
+            self.failed.emit(message[:500] or "辨識失敗，請再試一次。")
             return
         self.succeeded.emit(result)
 

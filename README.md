@@ -40,13 +40,13 @@ on the repository's **Releases** page.
 
 ## First launch
 
-PriceLens opens its Self-Test on the first launch. Connect a camera, select the
-AI provider you want under **Settings → AI**, enter its API key, and use **Test
-connection**. The camera preview, provider, browser, internet, barcode, and
-configuration checks are also available later from **Self-Test**.
+PriceLens opens **自我檢查** on the first launch. Connect a camera, select the
+AI provider you want under **設定 → AI 供應商**, enter its API key, and use
+**測試連線**. The camera preview, provider, browser, internet, barcode, and
+configuration checks are also available later from **自我檢查**.
 
-Press **Identify now** or **SPACE** to identify the current frame. For hands-free
-use, select **Start Detection** and place an item in view. PriceLens opens search
+Select **立即辨識** or press the space bar to identify the current frame. For hands-free
+use, select **開始偵測** and place an item in view. PriceLens opens search
 pages in the default browser and does not scrape listings. Any original-price
 figure it displays is an AI estimate.
 
@@ -57,7 +57,7 @@ figure it displays is an AI estimate.
   duplicate/cooldown handling.
 - Editable shopping sites, second-hand search mode, and AI identification
   history with replay, copy, and delete actions.
-- Settings import/export and a camera/provider Self-Test.
+- Settings import/export and **自我檢查** for camera and provider setup.
 
 ## Source development
 
