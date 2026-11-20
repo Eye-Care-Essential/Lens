@@ -31,12 +31,12 @@ To create a build without using a command line:
 
 1. Open the repository on GitHub and select **Actions**.
 2. Choose **Windows release** and select **Run workflow**.
-3. Enter a version such as `1.0.0`, then select **Run workflow**.
+3. Enter a complete version such as `1.0.1`, then select **Run workflow**.
 4. When the run completes, open it and download the
-   `PriceLens-Windows-v1.0.0` artifact.
+   `PriceLens-Windows-v1.0.1` artifact.
 
-Tagging a version as `vX.Y.Z` also builds and publishes the ZIP and setup program
-on the repository's **Releases** page.
+Manual runs upload artifacts to Actions. Push a Git tag such as `v1.0.1` to
+build and publish the ZIP and setup program on the repository's **Releases** page.
 
 ## First launch
 

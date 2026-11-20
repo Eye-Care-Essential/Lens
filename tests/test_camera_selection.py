@@ -25,13 +25,6 @@ def multimedia():
     return pytest.importorskip("PySide6.QtMultimedia")
 
 
-@pytest.fixture
-def qt_app(monkeypatch):
-    widgets = pytest.importorskip("PySide6.QtWidgets")
-    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
-    return widgets.QApplication.instance() or widgets.QApplication([])
-
-
 @pytest.mark.parametrize(
     ("position", "expected"),
     [
