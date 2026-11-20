@@ -568,5 +568,6 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt override
         self.camera_view.stop()
         if self._worker is not None:
+            self.hide()  # the wait can last the full AI timeout (up to 300 s)
             self._worker.wait()  # destroying a running QThread aborts the app
         super().closeEvent(event)

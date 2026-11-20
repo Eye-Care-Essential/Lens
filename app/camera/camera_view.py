@@ -107,6 +107,7 @@ class CameraView(QWidget):
             )
 
     def _on_camera_error(self, _error: object, message: str) -> None:
+        self._image = None  # otherwise SPACE would identify the last frozen frame
         clean_message = message.strip() or "無法開啟相機。"
         self.preview.setText(f"相機無法使用\n{clean_message}")
         self.camera_error.emit(clean_message)

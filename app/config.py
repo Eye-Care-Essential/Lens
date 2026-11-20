@@ -90,9 +90,16 @@ class AppConfig:
         path = config_path()
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except OSError:
             return cls()
+        except json.JSONDecodeError:
+            data = None
         if not isinstance(data, dict):
+            # Keep the unreadable file (it may hold API keys); the next save would overwrite it.
+            try:
+                path.replace(path.with_name(path.name + ".bad"))
+            except OSError:
+                pass
             return cls()
         return cls.from_dict(data)
 

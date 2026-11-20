@@ -148,3 +148,17 @@ def test_self_test_camera_failures_show_privacy_hint(qt_app, monkeypatch, failur
             assert "Access denied" in message
     finally:
         dialog.close()
+
+
+def test_camera_error_drops_the_last_frame(qt_app):
+    from PySide6.QtGui import QImage
+
+    from app.camera.camera_view import CameraView
+
+    view = CameraView()
+    view._image = QImage(4, 4, QImage.Format.Format_RGB888)
+    assert view.current_image() is not None
+
+    view._on_camera_error(None, "unplugged")
+
+    assert view.current_image() is None

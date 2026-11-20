@@ -112,3 +112,16 @@ def test_history_failure_entry_and_trim_removes_oldest_thumbnail(tmp_path: Path)
     assert [entry.status for entry in loaded.entries] == ["success"]
     assert loaded.entries[0].name_en == "Camera"
     assert old_thumb is not None and not old_thumb.exists()
+
+
+def test_unreadable_config_is_kept_aside_so_the_next_save_cannot_erase_keys(tmp_path: Path):
+    path = tmp_path / "config.json"
+    broken = '{"ai": {"gemini": {"api_key": "MY-KEY",}}}'
+    path.write_text(broken, encoding="utf-8")
+
+    with patch("app.config.config_path", return_value=path):
+        config = AppConfig.load()
+        config.save()
+
+    assert config.providers["gemini"].api_key == ""
+    assert (tmp_path / "config.json.bad").read_text(encoding="utf-8") == broken
