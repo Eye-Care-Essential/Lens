@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from app.ai.base import ProductResult
 from app.ai.factory import create_provider
-from app.camera.camera_view import CameraView, image_to_jpeg
+from app.camera.camera_view import CameraView, device_id, image_to_jpeg
 from app.config import AppConfig
 from app.detection.barcode import BarcodeReader
 from app.detection.image_utils import qimage_to_bgr, small_gray_frame
@@ -178,7 +178,7 @@ class MainWindow(QMainWindow):
         for device in self._devices:
             self.camera_combo.addItem(device.description(), device)
         selected = next(
-            (index for index, device in enumerate(self._devices) if self._device_id(device) == preferred_id),
+            (index for index, device in enumerate(self._devices) if device_id(device) == preferred_id),
             0 if self._devices and not preferred_id else -1,
         )
         if not self._devices:
@@ -203,7 +203,7 @@ class MainWindow(QMainWindow):
             device = None
         self.camera_view.set_device(device, self.config.camera_resolution)
         if device is not None:
-            self.config.camera_device_id = self._device_id(device)
+            self.config.camera_device_id = device_id(device)
             self._save_config(show_error=False)
         if device:
             self.camera_name_label.setText(f"Camera: {device.description()}")
@@ -218,10 +218,6 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Camera: {device.description()}")
         if self._auto_start_pending and device is None:
             self.statusBar().showMessage("Saved camera is unplugged. Choose another camera or run Self-Test.")
-
-    @staticmethod
-    def _device_id(device: QCameraDevice | None) -> str:
-        return bytes(device.id()).decode("utf-8", errors="replace") if device else ""
 
     def _pause_camera_for_dialog(self) -> bool:
         was_running = self._auto_detection_enabled or self._auto_start_pending
@@ -363,6 +359,9 @@ class MainWindow(QMainWindow):
         if not self._auto_detection_enabled or self._auto_pipeline is None:
             return
         now_ms = int(time.monotonic() * 1000)
+        if now_ms - self._last_detection_frame_ms < 100:
+            return  # throttle before the full-frame conversion below
+        self._last_detection_frame_ms = now_ms
         try:
             gray = small_gray_frame(image)
         except Exception as exc:
@@ -376,9 +375,6 @@ class MainWindow(QMainWindow):
             return
         if self._worker is not None:
             return  # a trigger now would be dropped, yet the pipeline would count it as handled
-        if now_ms - self._last_detection_frame_ms < 100:
-            return
-        self._last_detection_frame_ms = now_ms
         update = self._auto_pipeline.update(gray, now_ms)
         self.detection_state_label.setText(update.state.value)
         if update.ignored_reason:

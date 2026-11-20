@@ -85,22 +85,6 @@ class AppConfig:
     search: SearchConfig = field(default_factory=SearchConfig)
     general: GeneralConfig = field(default_factory=GeneralConfig)
 
-    @property
-    def gemini_api_key(self) -> str:
-        return self.providers["gemini"].api_key
-
-    @gemini_api_key.setter
-    def gemini_api_key(self, value: str) -> None:
-        self.providers["gemini"].api_key = value
-
-    @property
-    def gemini_model(self) -> str:
-        return self.providers["gemini"].model
-
-    @gemini_model.setter
-    def gemini_model(self, value: str) -> None:
-        self.providers["gemini"].model = value
-
     @classmethod
     def load(cls) -> "AppConfig":
         path = config_path()
@@ -120,9 +104,6 @@ class AppConfig:
         providers = _default_providers()
         for provider_id in PROVIDER_IDS:
             candidate = ai.get(provider_id, {})
-            if provider_id == "gemini" and not candidate:
-                # M1 used ai.gemini directly and only stored this provider.
-                candidate = ai.get("gemini", {})
             if isinstance(candidate, dict):
                 providers[provider_id] = ProviderConfig(
                     api_key=str(candidate.get("api_key", "")),
@@ -185,15 +166,10 @@ class AppConfig:
         }
 
     def save(self) -> Path:
-        """Write atomically; if the app folder is read-only, use the fallback path."""
+        """config_path() already falls back to APPDATA when the app folder is read-only."""
         path = config_path()
-        try:
-            write_json_atomic(path, self.to_dict())
-            return path
-        except OSError:
-            _, fallback = self._candidate_paths()
-            write_json_atomic(fallback, self.to_dict())
-            return fallback
+        write_json_atomic(path, self.to_dict())
+        return path
 
     @classmethod
     def import_from(cls, path: str | Path) -> "AppConfig":
@@ -204,12 +180,6 @@ class AppConfig:
 
     def export_to(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(self.to_dict(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    @staticmethod
-    def _candidate_paths() -> tuple[Path, Path]:
-        from app.paths import _config_candidates
-
-        return _config_candidates()
 
 
 def write_json_atomic(path: Path, payload: Any) -> None:

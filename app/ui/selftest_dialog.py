@@ -4,10 +4,11 @@ import tempfile
 import urllib.request
 import webbrowser
 from PySide6.QtCore import QThread, QTimer, Signal
-from PySide6.QtMultimedia import QCamera, QCameraDevice, QMediaCaptureSession, QMediaDevices, QVideoSink
+from PySide6.QtMultimedia import QCamera, QMediaCaptureSession, QMediaDevices, QVideoSink
 from PySide6.QtWidgets import QDialog, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from app.ai.factory import create_provider
+from app.camera.camera_view import device_id
 from app.ai.response import provider_failure_hint
 from app.config import AppConfig
 from app.detection.barcode import BarcodeReader
@@ -119,12 +120,12 @@ class SelfTestDialog(QDialog):
                 self._provider_worker.finished.connect(self._release_provider_worker)
                 self._provider_worker.start()
         except Exception as exc:
-            self._finish_check("provider", False, _provider_hint(str(exc)))
+            self._finish_check("provider", False, provider_failure_hint(str(exc)))
 
     def _start_camera_check(self) -> None:
         devices = list(QMediaDevices.videoInputs())
         selected_id = self.config.camera_device_id
-        device = next((item for item in devices if _device_id(item) == selected_id), None) if selected_id else (devices[0] if devices else None)
+        device = next((item for item in devices if device_id(item) == selected_id), None) if selected_id else (devices[0] if devices else None)
         if not devices:
             self._camera_finished(False, "No camera found. Connect a camera, then press Refresh in Settings.")
             return
@@ -175,7 +176,7 @@ class SelfTestDialog(QDialog):
         self._finish_check(key, passed, message)
 
     def _provider_check_finished(self, passed: bool, message: str) -> None:
-        self._finish_check("provider", passed, message if passed else _provider_hint(message))
+        self._finish_check("provider", passed, message if passed else provider_failure_hint(message))
 
     def _finish_check(self, key: str, passed: bool, message: str) -> None:
         current = self._results[key].text()
@@ -212,10 +213,6 @@ class SelfTestDialog(QDialog):
         if self._camera is not None:
             self._camera.stop()
         super().reject()
-
-
-def _device_id(device: QCameraDevice) -> str:
-    return bytes(device.id()).decode("utf-8", errors="replace")
 
 
 def _check_config() -> tuple[bool, str]:
@@ -262,7 +259,3 @@ def _check_barcode(enabled: bool) -> tuple[bool, str]:
     if reader.available:
         return True, "OpenCV barcode detector initialized."
     return False, "Barcode detector is unavailable. Install the OpenCV contrib package or disable barcode scanning in Settings."
-
-
-def _provider_hint(message: str) -> str:
-    return provider_failure_hint(message)

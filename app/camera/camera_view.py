@@ -79,9 +79,9 @@ class CameraView(QWidget):
         image = frame.toImage()
         if image.isNull():
             return
-        self._image = image.copy()
+        self._image = image
         self.frame_count += 1
-        self.frame_changed.emit(self._image.copy())
+        self.frame_changed.emit(image)
         pixmap = QPixmap.fromImage(self._image)
         self.preview.setPixmap(
             pixmap.scaled(
@@ -106,6 +106,10 @@ class CameraView(QWidget):
         clean_message = message.strip() or "Camera could not be opened."
         self.preview.setText(f"Camera unavailable\n{clean_message}")
         self.camera_error.emit(clean_message)
+
+
+def device_id(device: QCameraDevice | None) -> str:
+    return bytes(device.id()).decode("utf-8", errors="replace") if device else ""
 
 
 def image_to_jpeg(source: QImage | None) -> bytes | None:

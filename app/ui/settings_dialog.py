@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.ai.factory import create_provider
-from app.camera.camera_view import CameraView
+from app.camera.camera_view import CameraView, device_id
 from app.config import AppConfig, DEFAULT_MODELS, PROVIDER_IDS, SearchSiteConfig
 from app.paths import config_path
 from app.workers import ConnectionTestWorker
@@ -316,7 +316,7 @@ class SettingsDialog(QDialog):
     def _refresh_devices(self, preferred_id: str | None = None) -> None:
         if preferred_id is None:
             current = self.camera_combo.currentData()
-            preferred_id = self._device_id(current) if isinstance(current, QCameraDevice) else self.config.camera_device_id
+            preferred_id = device_id(current) if isinstance(current, QCameraDevice) else self.config.camera_device_id
         self._devices = list(QMediaDevices.videoInputs())
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
@@ -326,7 +326,7 @@ class SettingsDialog(QDialog):
             self.camera_combo.addItem("No camera found", "")
             selected = 0
         else:
-            selected = next((i for i, device in enumerate(self._devices) if self._device_id(device) == preferred_id), -1)
+            selected = next((i for i, device in enumerate(self._devices) if device_id(device) == preferred_id), -1)
             if selected < 0 and preferred_id:
                 self.camera_combo.insertItem(0, "Saved camera unavailable", f"__missing__:{preferred_id}")
                 selected = 0
@@ -341,10 +341,6 @@ class SettingsDialog(QDialog):
         if not isinstance(device, QCameraDevice):
             device = None
         self.camera_preview.set_device(device, self.resolution_combo.currentText())
-
-    @staticmethod
-    def _device_id(device: QCameraDevice) -> str:
-        return bytes(device.id()).decode("utf-8", errors="replace")
 
     def _load_sites(self) -> None:
         self.sites_table.setRowCount(len(self.config.search.sites))
@@ -395,10 +391,8 @@ class SettingsDialog(QDialog):
         if "{q}" not in url_template:
             QMessageBox.warning(self, "Invalid URL template", "The URL template needs a {q} placeholder.")
             return
-        query_field = self.sites_table.cellWidget(row, 2)
-        query = "iPhone 13" if query_field.currentData() == "en" else "iPhone 13"
         try:
-            webbrowser.open_new_tab(url_template.format(q=quote(query, safe="")))
+            webbrowser.open_new_tab(url_template.format(q=quote("iPhone 13", safe="")))
         except Exception as exc:
             QMessageBox.warning(self, "Could not open browser", str(exc))
 
@@ -412,7 +406,7 @@ class SettingsDialog(QDialog):
         self.config.ai_timeout_sec = self.timeout.value()
         device = self.camera_combo.currentData()
         if isinstance(device, QCameraDevice):
-            self.config.camera_device_id = self._device_id(device)
+            self.config.camera_device_id = device_id(device)
         elif self.camera_combo.currentText() == "Saved camera unavailable":
             self.config.camera_device_id = str(device).removeprefix("__missing__:")
         elif self.camera_combo.currentText() != "No camera found":
