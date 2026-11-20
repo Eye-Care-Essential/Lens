@@ -18,6 +18,11 @@ from app.workers import ConnectionTestWorker
 
 
 _CHECKING = "檢查中…"
+_CAMERA_PRIVACY_HINT = (
+    "請在 Windows 的「設定 → 隱私權與安全性 → 相機」開啟"
+    "「讓傳統型應用程式存取您的相機」，並確認筆電的相機隱私遮罩已打開、"
+    "相機未被相機鍵停用。"
+)
 
 
 class SystemChecksWorker(QThread):
@@ -179,6 +184,8 @@ class SelfTestDialog(QDialog):
             self._camera_timer.stop()
         if self._camera is not None:
             self._camera.stop()
+        if not passed:
+            message = f"{message}\n{_CAMERA_PRIVACY_HINT}"
         self._finish_check("camera", passed, message)
 
     def _system_check_finished(self, key: str, passed: bool, message: str) -> None:

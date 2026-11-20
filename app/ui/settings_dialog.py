@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from app.ai.factory import create_provider
 from app.ai.response import provider_failure_hint
-from app.camera.camera_view import CameraView, device_id
+from app.camera.camera_view import CameraView, camera_label, device_id
 from app.config import AppConfig, DEFAULT_MODELS, PROVIDER_IDS, SearchSiteConfig
 from app.paths import config_path
 from app.ui.messages import show_message
@@ -335,7 +335,7 @@ class SettingsDialog(QDialog):
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
         for device in self._devices:
-            self.camera_combo.addItem(device.description(), device)
+            self.camera_combo.addItem(camera_label(device), device)
         if not self._devices:
             self.camera_combo.addItem("找不到相機", "")
             selected = 0
