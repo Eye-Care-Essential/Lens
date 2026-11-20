@@ -45,6 +45,8 @@ class AutoDetectionPipeline:
             return DetectionUpdate(motion_update.state)
 
         if is_near_background(gray, self.background):
+            # Item was removed: the next item may look close to it, so don't dedupe against it.
+            self.dedupe.last_hash = None
             return DetectionUpdate(MotionState.STABLE, ignored_reason="empty_scene")
         if self.dedupe.is_duplicate(gray):
             return DetectionUpdate(MotionState.STABLE, ignored_reason="duplicate")

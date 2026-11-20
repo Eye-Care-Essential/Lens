@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.ai.base import ProductResult
+from app.config import write_json_atomic
 from app.paths import app_data_dir
+
+_PRODUCT_FIELDS = ("name_zh", "name_en", "brand", "model", "category", "query_zh", "query_en", "msrp_estimate")
 
 
 @dataclass
@@ -65,27 +68,8 @@ class HistoryStore:
         provider: str,
         max_entries: int = 200,
     ) -> HistoryEntry:
-        self.thumbs_dir.mkdir(parents=True, exist_ok=True)
-        thumb_name = f"{uuid.uuid4().hex}.jpg"
-        (self.thumbs_dir / thumb_name).write_bytes(thumbnail_bytes)
-        entry = HistoryEntry(
-            id=uuid.uuid4().hex,
-            timestamp=_timestamp(),
-            thumbnail=thumb_name,
-            name_zh=product.name_zh,
-            name_en=product.name_en,
-            brand=product.brand,
-            model=product.model,
-            category=product.category,
-            query_zh=product.query_zh,
-            query_en=product.query_en,
-            msrp_estimate=product.msrp_estimate,
-            barcode=barcode,
-            provider=provider,
-            status="success",
-        )
-        self._insert(entry, max_entries)
-        return entry
+        fields = {name: getattr(product, name) for name in _PRODUCT_FIELDS}
+        return self._add(thumbnail_bytes, max_entries, barcode=barcode, provider=provider, status="success", **fields)
 
     def add_failure(
         self,
@@ -95,6 +79,12 @@ class HistoryStore:
         provider: str,
         max_entries: int = 200,
     ) -> HistoryEntry:
+        return self._add(
+            thumbnail_bytes, max_entries, name_zh="Identification failed",
+            barcode=barcode, provider=provider, status="failed", error=error,
+        )
+
+    def _add(self, thumbnail_bytes: bytes, max_entries: int, **fields: str) -> HistoryEntry:
         self.thumbs_dir.mkdir(parents=True, exist_ok=True)
         thumb_name = f"{uuid.uuid4().hex}.jpg"
         (self.thumbs_dir / thumb_name).write_bytes(thumbnail_bytes)
@@ -102,20 +92,11 @@ class HistoryStore:
             id=uuid.uuid4().hex,
             timestamp=_timestamp(),
             thumbnail=thumb_name,
-            name_zh="Identification failed",
-            name_en="",
-            brand="",
-            model="",
-            category="",
-            query_zh="",
-            query_en="",
-            msrp_estimate="",
-            barcode=barcode,
-            provider=provider,
-            status="failed",
-            error=error,
+            **{**dict.fromkeys(_PRODUCT_FIELDS, ""), **fields},
         )
-        self._insert(entry, max_entries)
+        self.entries.insert(0, entry)
+        self._write()
+        self.trim(max_entries)
         return entry
 
     def delete(self, entry_id: str) -> bool:
@@ -143,20 +124,8 @@ class HistoryStore:
         path = self.thumbs_dir / entry.thumbnail
         return path if path.exists() else None
 
-    def _insert(self, entry: HistoryEntry, max_entries: int) -> None:
-        self.entries.insert(0, entry)
-        removed = self.entries[max(1, max_entries):]
-        self.entries = self.entries[:max(1, max_entries)]
-        for item in removed:
-            self._delete_thumbnail(item.thumbnail)
-        self._write()
-
     def _write(self) -> None:
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.history_path.write_text(
-            json.dumps([asdict(entry) for entry in self.entries], ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        write_json_atomic(self.history_path, [asdict(entry) for entry in self.entries])
 
     def _delete_thumbnail(self, filename: str) -> None:
         if not filename:

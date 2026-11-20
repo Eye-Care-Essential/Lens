@@ -58,6 +58,21 @@ class DetectionPipelineAcceptanceTests(unittest.TestCase):
         self.assertFalse(removal.triggered)
         self.assertEqual(removal.ignored_reason, "empty_scene")
 
+    def test_different_small_items_in_the_same_spot_each_trigger(self) -> None:
+        # Small items share most of the background, so their hashes are close.
+        table = _item_frame(50)
+        self.pipeline.reset_background(table)
+        for index, seed in enumerate((51, 52, 53)):
+            item = table.copy()
+            item[72:120, 84:132] = _item_frame(seed)[:48, :48]
+            start = index * 1000
+            update = self._place_item(item, start)
+            self.assertTrue(update.triggered, update.ignored_reason)
+            self.pipeline.update(table, start + 500)
+            self.pipeline.update(table, start + 550)
+            removal = self.pipeline.update(table, start + 651)
+            self.assertEqual(removal.ignored_reason, "empty_scene")
+
     def test_duplicate_filter_skips_a_near_identical_auto_frame(self) -> None:
         original = _item_frame(30)
         changed = original.copy()

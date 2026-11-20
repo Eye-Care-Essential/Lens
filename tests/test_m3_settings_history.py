@@ -48,8 +48,8 @@ def test_m1_gemini_config_migrates():
     })
 
     assert loaded.active_provider == "gemini"
-    assert loaded.gemini_api_key == "old-key"
-    assert loaded.gemini_model == "old-model"
+    assert loaded.providers["gemini"].api_key == "old-key"
+    assert loaded.providers["gemini"].model == "old-model"
     assert loaded.camera_device_id == "old-camera"
 
 
@@ -97,3 +97,18 @@ def test_history_persists_entries_and_deletes_thumbnail(tmp_path: Path):
 def test_provider_self_test_marks_authentication_errors():
     result = provider_failure_hint("HTTP 401 Unauthorized: invalid api_key")
     assert "rejected the API key" in result
+
+
+def test_history_failure_entry_and_trim_removes_oldest_thumbnail(tmp_path: Path):
+    product = ProductResult("相機", "Camera", "Brand", "Model", "camera", "品牌 相機", "Brand Camera", "", {})
+    store = HistoryStore(tmp_path)
+    failed = store.add_failure("timeout", b"a", "", "claude", max_entries=1)
+    old_thumb = store.thumbnail_path(failed)
+    assert failed.status == "failed" and failed.name_zh == "Identification failed" and failed.query_zh == ""
+
+    store.add_success(product, b"b", "", "gemini", max_entries=1)
+
+    loaded = HistoryStore(tmp_path)
+    assert [entry.status for entry in loaded.entries] == ["success"]
+    assert loaded.entries[0].name_en == "Camera"
+    assert old_thumb is not None and not old_thumb.exists()
