@@ -2,18 +2,26 @@
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
+from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 
 ROOT = Path(SPECPATH).resolve()
 datas = []
 binaries = []
-hiddenimports = collect_submodules("app")
+hiddenimports = [
+    "app.ai.anthropic_provider",
+    "app.ai.gemini_provider",
+    "app.ai.openai_provider",
+]
 
-# Provider clients are loaded lazily by app.ai.factory. Collect their modules and
-# package data explicitly so the frozen build contains every provider's SDK.
-for package in ("PySide6", "google.genai", "anthropic", "openai", "cv2"):
-    package_datas, package_binaries, package_hiddenimports = collect_all(package)
+# Let PyInstaller's Qt and OpenCV hooks collect the imported modules, camera
+# plugins, and native barcode dependencies. Collecting all of PySide6 would
+# also ship unused components such as Qt WebEngine, QML, and PDF.
+for package in ("google.genai", "anthropic", "openai"):
+    package_datas, package_binaries, package_hiddenimports = collect_all(
+        package,
+        include_py_files=False,
+    )
     datas += package_datas
     binaries += package_binaries
     hiddenimports += package_hiddenimports

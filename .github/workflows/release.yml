@@ -115,6 +115,20 @@ jobs:
           if ($installer.ExitCode -ne 0) { throw "Silent setup failed with exit code $($installer.ExitCode)" }
           Test-PriceLensStart $installDir
 
+      - name: Report package sizes
+        shell: pwsh
+        run: |
+          $packages = Get-Item -LiteralPath @(
+            "dist\PriceLens-portable-v$env:APP_VERSION.zip",
+            "dist\PriceLens-Setup-v$env:APP_VERSION.exe"
+          )
+          "### Windows package sizes" >> $env:GITHUB_STEP_SUMMARY
+          foreach ($package in $packages) {
+            $line = "- {0}: {1:N1} MiB ({2} bytes)" -f $package.Name, ($package.Length / 1MB), $package.Length
+            Write-Host $line
+            $line >> $env:GITHUB_STEP_SUMMARY
+          }
+
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
