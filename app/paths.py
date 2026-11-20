@@ -31,3 +31,8 @@ def config_path() -> Path:
         except OSError:
             continue
     return fallback
+
+
+def app_data_dir() -> Path:
+    """Keep local history beside the config (or in APPDATA when portable dir is read-only)."""
+    return config_path().parent
