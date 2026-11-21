@@ -25,18 +25,18 @@ Your settings, API keys, and history are kept next to the app when that folder i
 writable. Otherwise, PriceLens stores them in your Windows application data
 folder. Keep exported configuration files private because they contain API keys.
 
-## Build from GitHub Actions
-
-To create a build without using a command line:
+## Publish from the GitHub website
 
 1. Open the repository on GitHub and select **Actions**.
 2. Choose **Windows release** and select **Run workflow**.
-3. Enter a complete version such as `1.0.1`, then select **Run workflow**.
-4. When the run completes, open it and download the
-   `PriceLens-Windows-v1.0.1` artifact.
+3. Select the `main` branch, enter a complete version such as `1.1.0`, leave
+   **Publish the ZIP and installer to GitHub Releases** checked, and run it.
+4. When the run succeeds, the ZIP and EXE will be attached on **Releases**.
 
-Manual runs upload artifacts to Actions. Push a Git tag such as `v1.0.1` to
-build and publish the ZIP and setup program on the repository's **Releases** page.
+A manual release uses the existing tag for that version if present and builds
+from the commit it points to. A new version gets a tag such as `v1.1.0`.
+Uncheck the publish option to build a preview and download it from **Artifacts**.
+Pushing a `v*` tag also builds and publishes the Windows packages.
 
 ## First launch
 
